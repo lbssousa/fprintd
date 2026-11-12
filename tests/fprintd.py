@@ -654,6 +654,8 @@ class FPrintdVirtualDeviceBaseTest(FPrintdVirtualImageDeviceBaseTests):
                     print('Unexpected signal values')
             elif signal == 'VerifyFingerSelected':
                 self._selected_finger = params[0]
+            elif signal == 'VerifyMatchedFinger':
+                self._matched_finger = params[0]
             elif signal == 'VerifyStatus':
                 self._abort = True
                 self._last_result = params[0]
@@ -692,6 +694,7 @@ class FPrintdVirtualDeviceBaseTest(FPrintdVirtualImageDeviceBaseTests):
         self._last_result = None
         self._verify_stopped = False
         self._selected_finger = None
+        self._matched_finger = None
         self._abort = False
 
         if max_wait > 0:
@@ -879,12 +882,15 @@ class FPrintdVirtualDeviceBaseTest(FPrintdVirtualImageDeviceBaseTests):
 
         return bus, dev
 
-    def assertVerifyMatch(self, selected_finger=None):
+    def assertVerifyMatch(self, selected_finger=None, matched_finger=None):
         self.wait_for_result(expected='verify-match')
         self.assertTrue(self._verify_stopped)
 
         if selected_finger:
             self.assertEqual(selected_finger, self._selected_finger)
+
+        if matched_finger:
+            self.assertEqual(matched_finger, self._matched_finger)
 
     def assertVerifyNoMatch(self, selected_finger=None):
         self.wait_for_result(expected='verify-no-match')
@@ -1989,6 +1995,7 @@ class FPrintdVirtualDeviceClaimedTest(FPrintdVirtualDeviceBaseTest):
         self.assertTrue(self._verify_stopped)
         self.assertEqual(self._last_result, 'verify-match')
         self.assertEqual(self._selected_finger, 'left-thumb')
+        self.assertEqual(self._matched_finger, 'left-thumb')
         self.device.VerifyStop()
 
     def test_verify_finger_no_match(self):
@@ -2041,6 +2048,14 @@ class FPrintdVirtualDeviceClaimedTest(FPrintdVirtualDeviceBaseTest):
         self.assertEqual(self._selected_finger, 'any')
         self.device.VerifyStop()
 
+    def test_verify_any_finger_reports_matched_finger(self):
+        enrolled, enroll_map = self.enroll_multiple_images()
+        for finger in enrolled:
+            self.device.VerifyStart('(s)', 'any')
+            self.send_image(enroll_map[finger])
+            self.assertVerifyMatch(selected_finger='any', matched_finger=finger)
+            self.device.VerifyStop()
+
     def test_verify_any_finger_no_match(self, selected_finger='any'):
         enrolled, _map = self.enroll_multiple_images()
         verify_image = 'tented_arch'
@@ -2048,6 +2063,7 @@ class FPrintdVirtualDeviceClaimedTest(FPrintdVirtualDeviceBaseTest):
         self.device.VerifyStart('(s)', 'any')
         self.send_image(verify_image)
         self.assertVerifyNoMatch(selected_finger)
+        self.assertIsNone(self._matched_finger)
         self.device.VerifyStop()
 
     def test_verify_any_finger_multiple_users(self):

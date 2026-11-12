@@ -489,6 +489,31 @@
 			</doc:doc>
 		</signal>
 
+		<signal name="VerifyMatchedFinger">
+			<arg type="s" name="finger_name">
+				<doc:doc>
+					<doc:summary>
+						<doc:para>
+							A string representing the enrolled finger that matched.
+						</doc:para>
+					</doc:summary>
+				</doc:doc>
+			</arg>
+			<doc:doc>
+				<doc:description>
+					<doc:para>
+						Emitted right before <doc:ref type="signal" to="Device::VerifyStatus">Device::VerifyStatus</doc:ref>
+						reports verify-match, with the finger whose print matched. Unlike
+						<doc:ref type="signal" to="Device::VerifyFingerSelected">Device::VerifyFingerSelected</doc:ref>,
+						it names the actual finger when "any" was verified against several enrolled prints.
+					</doc:para>
+				</doc:description>
+				<doc:seealso>
+					<doc:ref type="description" to="fingerprint-names">Fingerprint names</doc:ref>.
+				</doc:seealso>
+			</doc:doc>
+		</signal>
+
 		<!-- ************************************************************ -->
 
 		<signal name="VerifyStatus">

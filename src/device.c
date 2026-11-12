@@ -135,6 +135,7 @@ enum fprint_device_properties {
 enum fprint_device_signals {
   SIGNAL_VERIFY_STATUS,
   SIGNAL_VERIFY_FINGER_SELECTED,
+  SIGNAL_VERIFY_MATCHED_FINGER,
   SIGNAL_ENROLL_STATUS,
   NUM_SIGNALS,
 };
@@ -434,6 +435,8 @@ fprint_device_class_init (FprintDeviceClass *klass)
     g_signal_lookup ("enroll-status", FPRINT_TYPE_DEVICE);
   signals[SIGNAL_VERIFY_FINGER_SELECTED] =
     g_signal_lookup ("verify-finger-selected", FPRINT_TYPE_DEVICE);
+  signals[SIGNAL_VERIFY_MATCHED_FINGER] =
+    g_signal_lookup ("verify-matched-finger", FPRINT_TYPE_DEVICE);
 
   quark_auth_user = g_quark_from_static_string ("authorized-user");
 }
@@ -1262,11 +1265,11 @@ load_all_prints (FprintDevice *rdev)
 
 static void
 report_verify_status (FprintDevice *rdev,
-                      gboolean      match,
+                      FpPrint      *match,
                       GError       *error)
 {
   FprintDevicePrivate *priv = fprint_device_get_instance_private (rdev);
-  const char *result = verify_result_to_name (match, error);
+  const char *result = verify_result_to_name (match != NULL, error);
 
   g_autoptr(SessionData) session = NULL;
   gboolean done;
@@ -1282,6 +1285,22 @@ report_verify_status (FprintDevice *rdev,
       if (!g_error_matches (error, G_IO_ERROR, G_IO_ERROR_CANCELLED))
         g_warning ("Verify status already reported. Ignoring %s", result);
       return;
+    }
+
+  /* Tell the front-end which finger matched before the result, so that
+   * it knows it when verify-match arrives. This matters on identify, where
+   * VerifyFingerSelected only said "any". */
+  if (match != NULL && error == NULL)
+    {
+      FpFinger finger = fp_print_get_finger (match);
+
+      if (finger != FP_FINGER_UNKNOWN)
+        {
+          g_debug ("report_verify_status: matched finger %s",
+                   fp_finger_to_name (finger));
+          g_signal_emit (rdev, signals[SIGNAL_VERIFY_MATCHED_FINGER],
+                         0, fp_finger_to_name (finger));
+        }
     }
 
   g_debug ("report_verify_status: result %s", result);
@@ -1544,15 +1563,13 @@ match_cb (FpDevice *device,
 {
   FprintDevice *rdev = user_data;
   FprintDevicePrivate *priv = fprint_device_get_instance_private (rdev);
-  gboolean matched;
   gboolean cancelled;
 
   g_assert_true (error == NULL || error->domain == FP_DEVICE_RETRY);
 
   cancelled = g_cancellable_is_cancelled (priv->current_cancellable);
-  matched = match != NULL && cancelled == FALSE;
 
-  report_verify_status (rdev, matched, error);
+  report_verify_status (rdev, cancelled ? NULL : match, error);
 }
 
 static void
@@ -1587,7 +1604,7 @@ verify_cb (FpDevice *dev, GAsyncResult *res, void *user_data)
 
       if (error)
         {
-          report_verify_status (rdev, FALSE, error);
+          report_verify_status (rdev, NULL, error);
 
           if (!g_error_matches (error, G_IO_ERROR, G_IO_ERROR_CANCELLED))
             g_warning ("Device reported an error during verify: %s",
@@ -1632,7 +1649,7 @@ identify_cb (FpDevice *dev, GAsyncResult *res, void *user_data)
 
       if (error)
         {
-          report_verify_status (rdev, FALSE, error);
+          report_verify_status (rdev, NULL, error);
 
           if (!g_error_matches (error, G_IO_ERROR, G_IO_ERROR_CANCELLED))
             g_warning ("Device reported an error during identify: %s",
