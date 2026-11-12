@@ -1,0 +1,35 @@
+# Maintainer: Laércio de Sousa <laercio@sivali.sousa.nom.br>
+#
+# Builds from the repository this PKGBUILD lives in (the parent of
+# $startdir), so `makepkg -si` in packaging/ replaces Arch's fprintd with
+# this tree: fprintd 1.94.5 plus the Device::VerifyMatchedFinger signal,
+# which tells D-Bus clients which enrolled finger matched a verification.
+
+pkgname=fprintd-matched-finger
+pkgver=1.94.5.matched.1
+pkgrel=1
+pkgdesc='D-Bus service to access fingerprint readers (with the VerifyMatchedFinger signal)'
+arch=(x86_64 aarch64)
+url='https://github.com/lbssousa/fprintd'
+license=(GPL-2.0-or-later)
+depends=(dbus glib2 glibc libfprint pam polkit systemd systemd-libs)
+makedepends=(meson python-dbus python-gobject)
+provides=("fprintd=${pkgver%.matched.*}")
+conflicts=(fprintd)
+backup=(etc/fprintd.conf)
+options=(!debug)
+
+_srcroot() { cd "$startdir/.."; }
+
+build() {
+  _srcroot
+  arch-meson . "$srcdir/build" \
+    -D pam_modules_dir=/usr/lib/security \
+    -D gtk_doc=false \
+    -D man=false
+  meson compile -C "$srcdir/build"
+}
+
+package() {
+  meson install -C "$srcdir/build" --destdir "$pkgdir"
+}
